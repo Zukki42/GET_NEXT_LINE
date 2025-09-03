@@ -3,139 +3,113 @@
 /*                                                        :::      ::::::::   */
 /*   get_next_line.c                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: bavirgil <bavirgil@student.42heilbronn.    +#+  +:+       +#+        */
+/*   By: bavirgil <bavirgil@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/19 14:15:59 by bavirgil          #+#    #+#             */
-/*   Updated: 2025/09/01 17:59:44 by bavirgil         ###   ########.fr       */
+/*   Updated: 2025/09/03 20:01:29 by bavirgil         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "get_next_line.h"
 
-//Find the index of the first '\n' in a string, or return
-	//-1 if none is found 
-static int	find_nl(const char *s)
+// Find the index of the first '\n' in a string, or return -1 if none is found
+int	find_nl_dup_n(const char *s, size_t n)
 {
-	int	i;
+	size_t	i;
 
-	if (s == NULL)
+	if (!s)
 		return (-1);
 	i = 0;
-	while (s[i] != '\0')
+	while (i < n && s[i])
 	{
 		if (s[i] == '\n')
-			return (i);
+			return ((int)i);
 		i++;
 	}
 	return (-1);
 }
 
-// Duplicate the first n characters of a string into a new memory allocation
-static char	*dup_n(const char *s, size_t n)
+// Read from the file descriptor until a newline is found or EOF is reached
+int	fill_until_nl(int fd, char **stash)
 {
-	char	*out;
-	size_t	i;
-
-	out = (char *)malloc(sizeof(char) * (n + 1));
-	if (out == NULL)
-		return (NULL);
-	i = 0;
-	while (i < n)
-	{
-		out[i] = s[i];
-		i++;
-	}
-	out[i] = '\0';
-	return (out);
-}
-
-// Read from the file descriptor until a newline is found or EOF is reached 
-static int	fill_until_nl(int fd, char **stash)
-{
-	char	buf[BUFFER_SIZE + 1];
-	int		readn;
+	char	buffer[BUFFER_SIZE + 1];
+	int		bytes_read;
+	int		nl_index;
 	char	*tmp;
 
-	readn = 1;
-	while (find_nl(*stash) == -1 && readn > 0)
 	{
-		readn = read(fd, buf, BUFFER_SIZE);
-		if (readn < 0)
-			return (-1);
-		buf[readn] = '\0';
-		tmp = ft_strjoin(*stash, buf);
-		if (!tmp)
+		nl_index = -1;
+		while (nl_index == -1)
 		{
-			free(*stash);
-			*stash = NULL;
-			return (-1);
+			bytes_read = read(fd, buffer, BUFFER_SIZE);
+			if (bytes_read <= 0)
+				break ;
+			buffer[bytes_read] = '\0';
+			if (!*stash)
+				*stash = ft_strdup(buffer);
+			else
+			{
+				tmp = ft_strjoin(*stash, buffer);
+				free(*stash);
+				*stash = tmp;
+			}
+			nl_index = find_nl_dup_n(*stash, ft_strlen(*stash));
 		}
-		free(*stash);
-		*stash = tmp;
+		return (bytes_read);
 	}
-	return (readn);
 }
 
-// Extract the next line from the stash and update the stash 
-static char	*gnl_read_and_extract(char **stash)
+// Extract the next line from the stash
+char	*extract_line_from_stash(char *stash)
 {
-	int		nl;
+	int		i;
 	char	*line;
-	char	*rest;
 
-	if (!*stash || !(*stash)[0])
+	if (!stash || !*stash)
 		return (NULL);
-	nl = find_nl(*stash);
-	if (nl >= 0)
-	{
-		line = dup_n(*stash, nl + 1);
-		if (!line)
-		{
-			free(*stash);
-			*stash = NULL;
-			return (NULL);
-		}
-		rest = ft_strdup(*stash + nl + 1);
-		if (!rest)
-		{
-			free(line);
-			free(*stash);
-			*stash = NULL;
-			return (NULL);
-		}
-	}
-	else
-	{
-		line = dup_n(*stash, ft_strlen(*stash));
-		if (!line)
-		{
-			free(*stash);
-			*stash = NULL;
-			return (NULL);
-		}
-		rest = NULL;
-	}
-	free(*stash);
-	*stash = rest;
+	i = 0;
+	while (stash[i] && stash[i] != '\n')
+		i++;
+	if (stash[i] == '\n')
+		i++;
+	line = ft_substr(stash, 0, i);
 	return (line);
+}
+
+// Update the stash after extracting a line
+char	*update_stash(char *stash)
+{
+	int		i;
+	char	*new_stash;
+
+	if (!stash)
+		return (NULL);
+	i = 0;
+	while (stash[i] && stash[i] != '\n')
+		i++;
+	if (!stash[i])
+	{
+		free(stash);
+		return (NULL);
+	}
+	new_stash = ft_substr(stash, i + 1, ft_strlen(stash) - (i + 1));
+	free(stash);
+	return (new_stash);
 }
 
 // Main function to read the next line from a file descriptor
 char	*get_next_line(int fd)
 {
-	static char	*stash = NULL;
-	int			status;
+	static char	*stash;
+	char		*line;
+	int			bytes_read;
 
 	if (fd < 0 || BUFFER_SIZE <= 0)
 		return (NULL);
-	if (!stash)
-	{
-		stash = ft_strdup("");
-		if (!stash)
-			return (NULL);
-	}
-	status = fill_until_nl(fd, &stash);
-	if (status == -1 || (status == 0 && !stash[0]))
-		return (free(stash), stash = NULL, NULL);
-	return (gnl_read_and_extract(&stash));
+	bytes_read = fill_until_nl(fd, &stash);
+	if (!stash || bytes_read < 0)
+		return (NULL);
+	line = extract_line_from_stash(stash);
+	stash = update_stash(stash);
+	return (line);
 }
