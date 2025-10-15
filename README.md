@@ -39,10 +39,10 @@ The output will be :
 
 ### 🧩 Key Features
 
-✅ Reads line by line (not character-by-character)
-✅ Handles multiple file descriptors (each has its own static buffer)
-✅ Works with any BUFFER_SIZE you define at compile time
-✅ Memory-safe — each line is dynamically allocated and freed after us
+- ✅ Reads line by line (not character-by-character)
+- ✅ Handles multiple file descriptors (each has its own static buffer)
+- ✅ Works with any BUFFER_SIZE you define at compile time
+- ✅ Memory-safe — each line is dynamically allocated and freed after us
 
 ### 🖋️ Author
 
